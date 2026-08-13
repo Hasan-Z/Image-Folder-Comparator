@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Image Compare — Light Table</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="masthead">
+      <h1><span class="mark"></span> Light Table</h1>
+      <span class="tagline">two folders // one bench // similarity by the numbers</span>
+    </header>
+
+    <!-- ============ CONTROL PANEL ============ -->
+    <section class="control-panel">
+      <div class="folder-row">
+        <div class="dropzone" id="folder1Dropzone">
+          <label class="field-label"><span class="n">01</span>Folder A</label>
+          <div class="path-input-group">
+            <input type="text" id="folder1" placeholder="/path/to/folder-a — or drag a folder here" />
+            <button class="btn" data-browse-target="folder1">Browse…</button>
+          </div>
+          <div class="scan-count" id="count1"></div>
+          <div class="drop-status" id="folder1DropStatus"></div>
+        </div>
+        <div class="dropzone" id="folder2Dropzone">
+          <label class="field-label"><span class="n">02</span>Folder B</label>
+          <div class="path-input-group">
+            <input type="text" id="folder2" placeholder="/path/to/folder-b — or drag a folder here" />
+            <button class="btn" data-browse-target="folder2">Browse…</button>
+          </div>
+          <div class="scan-count" id="count2"></div>
+          <div class="drop-status" id="folder2DropStatus"></div>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+        <div class="setting-block">
+          <label class="field-label">Comparison mode</label>
+          <div class="mode-toggle" id="modeToggle">
+            <button type="button" class="active" data-mode="hash" title="Perceptual hash — instant, best for near-identical/duplicate files">Hash</button>
+            <button type="button" data-mode="dino" title="DINOv2 — visual similarity model, purpose-built for this task, runs locally on CPU">DINOv2</button>
+            <button type="button" data-mode="clip" title="CLIP — semantic/text-aligned model, better at matching by subject or scene than exact visual likeness">CLIP</button>
+          </div>
+          <div class="clip-status" id="clipStatus"></div>
+        </div>
+
+        <div class="setting-block">
+          <label class="field-label">Visual threshold <span class="slider-value" id="visualThresholdVal">70%</span></label>
+          <input type="range" id="visualThreshold" min="0" max="100" value="70" />
+        </div>
+
+        <div class="setting-block">
+          <label class="field-label">Filename threshold <span class="slider-value" id="filenameThresholdVal">90%</span></label>
+          <input type="range" id="filenameThreshold" min="0" max="100" value="90" />
+        </div>
+
+        <div class="setting-block">
+          <label class="field-label">Include patterns</label>
+          <input type="text" id="includePatterns" placeholder="*.jpg *.png (blank = all)" />
+        </div>
+
+        <div class="setting-block">
+          <label class="field-label">Exclude patterns</label>
+          <input type="text" id="excludePatterns" placeholder="*.gif (blank = none)" />
+        </div>
+
+        <div class="setting-block">
+          <label class="field-label">Options</label>
+          <div style="display:flex; flex-direction:column; gap:0.55rem;">
+            <label class="checkbox-row"><input type="checkbox" id="recursive" /> Recursive (include subfolders)</label>
+            <label class="checkbox-row">
+              <input type="checkbox" id="deepRotation" />
+              Deep Rotation (360° sweep) <span class="hint">slower</span>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="run-row">
+        <button class="btn btn-primary" id="runBtn">Run comparison</button>
+        <span style="font-family: var(--font-mono); font-size:0.75rem; color: var(--muted);" id="runHint"></span>
+      </div>
+
+      <div class="error-banner" id="errorBanner"></div>
+    </section>
+
+    <!-- ============ PROGRESS ============ -->
+    <section class="progress-panel" id="progressPanel">
+      <div class="progress-meta">
+        <span class="phase" id="progressPhase">scanning…</span>
+        <span id="progressStats">0 / 0 · ETA —</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-controls">
+        <button class="btn" id="pauseBtn" data-paused="0">Pause</button>
+        <button class="btn btn-stop" id="stopBtn">Stop</button>
+      </div>
+    </section>
+
+    <!-- ============ RESULTS ============ -->
+    <section id="resultsSection" style="display:none;">
+      <div class="summary-panel" id="summaryPanel"></div>
+      <div class="results-header">
+        <h2>Matches</h2>
+        <div class="results-header-right">
+          <span class="results-count" id="resultsCount"></span>
+          <button class="btn" id="exportXlsxBtn">⬇ Export to Excel</button>
+        </div>
+      </div>
+      <div id="resultsBody"></div>
+    </section>
+
+    <!-- ============ ACTIVITY LOG ============ -->
+    <section class="log-panel" id="logPanel">
+      <button class="log-toggle" id="logToggle" aria-expanded="false">
+        <span class="log-toggle-arrow">&#9656;</span> Activity log
+        <span class="log-toggle-count" id="logCount"></span>
+      </button>
+      <div class="log-body" id="logBody" hidden></div>
+    </section>
+  </div>
+
+  <!-- ============ PREVIEW MODAL ============ -->
+  <div class="modal-backdrop" id="previewBackdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Side-by-side preview</h3>
+        <button class="modal-close" id="previewClose" aria-label="Close preview">&times;</button>
+      </div>
+      <div class="preview-body">
+        <div class="preview-pane">
+          <img id="previewImg1" alt="Image from folder A" />
+          <div class="preview-meta" id="previewMeta1"></div>
+        </div>
+        <div class="preview-pane">
+          <img id="previewImg2" alt="Image from folder B" />
+          <div class="preview-meta" id="previewMeta2"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ BROWSE MODAL ============ -->
+  <div class="modal-backdrop" id="browseBackdrop">
+    <div class="modal" style="max-width:560px;">
+      <div class="modal-header">
+        <h3>Select a folder</h3>
+        <button class="modal-close" id="browseClose" aria-label="Close browser">&times;</button>
+      </div>
+      <div class="browse-path" id="browsePath"></div>
+      <div class="browse-list" id="browseList"></div>
+      <div class="modal-footer">
+        <button class="btn" id="browseComputer">💻 This PC</button>
+        <div class="footer-right">
+          <button class="btn" id="browseUp">↑ Up one level</button>
+          <button class="btn btn-primary" id="browseChoose">Use this folder</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
